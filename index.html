@@ -51,7 +51,7 @@ const {useState,useRef,useEffect}=React;
 const MONTHS=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const WEEKDAYS=["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
 const DAYS=["Mo","Di","Mi","Do","Fr","Sa","So"];
-const BOX=14, GAP=3, WEEKS=52, CW=WEEKS-1; // CW=51 = laufende Woche (Spalte ganz rechts)
+const BOX=14, GAP=3;
 
 // ── Datums-Helfer (lokale Zeit, Montag-basiert) ──────────────────────────────
 function isoDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
@@ -62,8 +62,12 @@ const TODAY_DATE=new Date();
 const TODAY_ISO=isoDate(TODAY_DATE);
 const THIS_MONDAY=mondayOf(TODAY_DATE);
 const TODAY=(TODAY_DATE.getDay()+6)%7; // Index heute in der Woche (Mo=0 … So=6)
-function weekMonday(wOff){return addDays(THIS_MONDAY,wOff*7);}       // Montag der Woche mit Versatz
-function colMonday(i){return addDays(THIS_MONDAY,(i-CW)*7);}          // Heatmap-Spalte i → Montag
+const YEAR=TODAY_DATE.getFullYear();
+const YEAR_START_MONDAY=mondayOf(new Date(YEAR,0,1));                 // Montag der Woche mit dem 1. Jan
+const WEEKS=Math.round((mondayOf(new Date(YEAR,11,31))-YEAR_START_MONDAY)/(7*864e5))+1; // Spalten Jan→Dez
+const CW=Math.round((THIS_MONDAY-YEAR_START_MONDAY)/(7*864e5));        // Index der laufenden Woche im Jahr
+function weekMonday(wOff){return addDays(THIS_MONDAY,wOff*7);}         // Wochenansicht: Versatz von heute
+function colMonday(i){return addDays(YEAR_START_MONDAY,i*7);}          // Heatmap-Spalte i (0=Jan) → Montag
 
 const MEDALS=[
   {id:"bronze",weeks:4, emoji:"🥉",label:"Bronze", color:"#cd7f32"},
@@ -95,7 +99,9 @@ function computeYearData(profile,habits,profilDays){
     const dateMap=(profilDays[profile]&&profilDays[profile][h.id])||{};
     const arr=Array(WEEKS).fill(null);
     for(let i=0;i<WEEKS;i++){
-      const done=weekDoneCount(dateMap,colMonday(i),active);
+      const mon=colMonday(i);
+      if(mon>THIS_MONDAY){arr[i]=null;continue;}                                  // Zukunft → leer
+      const done=weekDoneCount(dateMap,mon,active);
       if(i===CW)            arr[i]=done>=h.weekGoal?"full":null;                 // läuft noch → nur „full" oder offen
       else if(done===0)     arr[i]=null;                                          // keine Daten = nicht getrackt
       else                  arr[i]=done>=h.weekGoal?"full":done>=h.weekGoal-1?"almost":"miss";
@@ -105,11 +111,15 @@ function computeYearData(profile,habits,profilDays){
   return out;
 }
 
-// Streak: laufende Woche bricht die Serie NICHT, solange sie noch nicht vorbei ist
-function calcStreak(arr=[]){
+// Streak aus echten Daten rückwärts (über Jahreswechsel hinweg):
+// laufende Woche bricht die Serie NICHT, solange sie noch nicht vorbei ist
+function streakOf(dateMap,active,weekGoal){
+  dateMap=dateMap||{};active=active||[0,1,2,3,4,5,6];
   let s=0;
-  if(arr[CW]==="full")s++;            // diese Woche zählt nur, wenn schon erreicht
-  for(let i=CW-1;i>=0;i--){if(arr[i]==="full")s++;else break;}
+  if(weekDoneCount(dateMap,THIS_MONDAY,active)>=weekGoal)s++;   // diese Woche zählt nur, wenn schon erreicht
+  for(let w=1;w<520;w++){
+    if(weekDoneCount(dateMap,addDays(THIS_MONDAY,-w*7),active)>=weekGoal)s++;else break;
+  }
   return s;
 }
 function getML(){return Array.from({length:WEEKS},(_,i)=>{const m=colMonday(i).getMonth();return m!==(i>0?colMonday(i-1).getMonth():-1)?MONTHS[m]:"";});}
@@ -239,7 +249,7 @@ function CelebrationModal({medal,habitName,onClose}){
 }
 
 // ── ProfilHeatmap ─────────────────────────────────────────────────────────────
-function ProfilHeatmap({habits,yearData,activeId,setActiveId,dep}){
+function ProfilHeatmap({habits,yearData,daysData={},activeId,setActiveId,dep}){
   const{scrollRef,curRef}=useHeatScroll(dep,0.8);
   const labels=getML();
   const[celebration,setCelebration]=useState(null);
@@ -288,7 +298,7 @@ function ProfilHeatmap({habits,yearData,activeId,setActiveId,dep}){
     </div>
     <Legende/>
     {activeId!==null&&(()=>{
-      const h=habits.find(x=>x.id===activeId),s=getS(activeId),streak=calcStreak(yearData[activeId]);
+      const h=habits.find(x=>x.id===activeId),s=getS(activeId),streak=streakOf(daysData[activeId]||{},h&&h.activeDays,h&&h.weekGoal);
       return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         {streak>=2&&(<div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",
           background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.15)",borderRadius:12}}>
@@ -312,7 +322,7 @@ function ProfilHeatmap({habits,yearData,activeId,setActiveId,dep}){
 }
 
 // ── UebersichtHeatmap ─────────────────────────────────────────────────────────
-function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,dep}){
+function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,profilDays={},dep}){
   const{scrollRef,curRef}=useHeatScroll(dep,0.8);
   const labels=getML();
   const[activeH,setActiveH]=useState(null);
@@ -657,7 +667,7 @@ function WocheView({habits,profileDays,wOff,weekLabel,onNavigate,onDayToggle,yea
         const prog=active.reduce((s,i)=>s+(dateMap[dayIso(i)]?1:0),0);
         const pct=Math.min(100,(prog/h.weekGoal)*100);
         const done=pct>=100;
-        const streak=wOff===0?calcStreak(yearData[h.id]||[]):0;
+        const streak=wOff===0?streakOf(profileDays[h.id]||{},active,h.weekGoal):0;
         return(<div key={h.id} className="card" style={{boxShadow:done?`0 0 0 1px ${h.color}55`:"none",transition:"box-shadow 0.3s"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
             <div style={{display:"flex",alignItems:"center",gap:9}}>
