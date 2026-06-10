@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Habit Tracker</title>
+
+  <!-- iPhone / PWA -->
+  <meta name="theme-color" content="#111118" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Habits" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    html,body{margin:0;padding:0;background:#111118;-webkit-tap-highlight-color:transparent;}
+    #root{min-height:100vh;}
+    /* Safe-Area fürs iPhone-Notch / Home-Indicator */
+    body{
+      padding-top:env(safe-area-inset-top);
+      padding-bottom:env(safe-area-inset-bottom);
+      padding-left:env(safe-area-inset-left);
+      padding-right:env(safe-area-inset-right);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+const {useState,useRef,useEffect}=React;
+
+function gwm(w){return Math.min(11,Math.floor((w*7)/30.44));}
+const MONTHS=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+const WEEKDAYS=["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const DAYS=["Mo","Di","Mi","Do","Fr","Sa","So"];
+const CW=22, BOX=14, GAP=3;
+const TODAY=(new Date().getDay()+6)%7; // Mo=0 … So=6, passend zur Wochengrid
+
+const MEDALS=[
+  {id:"bronze",weeks:4, emoji:"🥉",label:"Bronze", color:"#cd7f32"},
+  {id:"silver",weeks:8, emoji:"🥈",label:"Silber", color:"#b0b8c1"},
+  {id:"gold",  weeks:13,emoji:"🥇",label:"Gold",   color:"#f5c542"},
+  {id:"platin",weeks:26,emoji:"💎",label:"Platin", color:"#7dd3f5"},
+];
+
+const HABIT_BASE=[
+  {id:1,name:"Sport",         emoji:"🏃",weekGoal:5,color:"#22c55e",activeDays:[0,1,2,3,4,5,6]},
+  {id:2,name:"Früh schlafen", emoji:"😴",weekGoal:5,color:"#a78bfa",activeDays:[6,0,1,2,3]},
+  {id:3,name:"Wasser morgens",emoji:"💧",weekGoal:7,color:"#38bdf8",activeDays:[0,1,2,3,4,5,6]},
+  {id:4,name:"Lesen",         emoji:"📚",weekGoal:3,color:"#fb923c",activeDays:[0,1,2,3,4,5,6]},
+];
+function mkH(){return HABIT_BASE.map(h=>({...h}));}
+
+const MOCK={
+  "Marilena":{
+    1:{"0":[1,1,0,1,1,1,1],"-1":[1,1,1,0,1,1,0],"-2":[0,1,1,1,0,1,0],"-3":[1,0,1,1,1,0,0]},
+    2:{"0":[1,1,0,1,0,0,1],"-1":[1,0,1,1,1,0,0],"-2":[1,1,0,1,1,0,0],"-3":[0,1,1,1,0,0,1]},
+    3:{"0":[1,0,1,1,1,1,1],"-1":[1,1,1,1,1,1,0],"-2":[1,1,0,1,1,1,1],"-3":[1,1,1,0,1,1,1]},
+    4:{"0":[1,0,1,1,0,1,0],"-1":[0,1,0,1,0,1,0],"-2":[1,0,0,1,1,0,0],"-3":[0,1,1,0,0,1,0]},
+  },
+  "Markus":{
+    1:{"0":[0,1,1,0,1,1,0],"-1":[1,0,1,1,0,1,0],"-2":[1,1,0,0,1,0,1],"-3":[0,1,1,1,0,0,1]},
+    2:{"0":[1,0,1,0,0,0,1],"-1":[0,1,1,0,1,0,0],"-2":[1,0,1,1,0,0,0],"-3":[1,1,0,0,1,0,1]},
+    3:{"0":[1,1,0,1,1,0,1],"-1":[0,1,1,1,0,1,1],"-2":[1,0,1,0,1,1,0],"-3":[1,1,0,1,0,1,1]},
+    4:{"0":[0,1,0,0,1,0,1],"-1":[1,0,1,0,0,1,0],"-2":[0,1,0,1,0,0,1],"-3":[1,0,0,1,1,0,0]},
+  },
+};
+
+function genWeek(seed){
+  return Array.from({length:52},(_,i)=>{
+    if(i>CW)return null;
+    const r=((Math.sin(i*seed+seed)*43758.5453)%1+1)%1;
+    return r>0.6?"full":r>0.38?"almost":"miss";
+  });
+}
+const YEAR_MOCK={
+  "Marilena":{1:genWeek(1.7),2:genWeek(2.3),3:genWeek(3.1),4:genWeek(4.5)},
+  "Markus":  {1:genWeek(2.1),2:genWeek(1.4),3:genWeek(3.8),4:genWeek(5.2)},
+};
+
+function computeYearData(profile,habits,profilDays,yearMock){
+  const out={};
+  habits.forEach(h=>{
+    const base=[...(yearMock[profile]?.[h.id]||Array(52).fill(null))];
+    const active=h.activeDays||[0,1,2,3,4,5,6];
+    for(let offset=-3;offset<=0;offset++){
+      const wi=CW+offset;if(wi<0||wi>51)continue;
+      const days=profilDays[profile]?.[h.id]?.[String(offset)];
+      if(days){
+        const done=days.reduce((s,v,i)=>s+(active.includes(i)?v:0),0);
+        base[wi]=done>=h.weekGoal?"full":done>=h.weekGoal-1?"almost":"miss";
+      }
+    }
+    out[h.id]=base;
+  });
+  return out;
+}
+
+function calcStreak(d=[]){let s=0;for(let i=CW;i>=0;i--){if(d[i]==="full")s++;else break;}return s;}
+function getML(){return Array.from({length:52},(_,i)=>{const m=gwm(i);return m!==gwm(i-1)?MONTHS[m]:"";});}
+function getEarnedMedals(streak){return MEDALS.filter(m=>streak>=m.weeks);}
+
+function todayLabel(){
+  const n=new Date();
+  return `${WEEKDAYS[n.getDay()]}, ${n.getDate()}. ${MONTHS[n.getMonth()]} ${n.getFullYear()}`;
+}
+
+// ── localStorage Persistenz ──────────────────────────────────────────────────
+const LS_KEY="habitTracker_v1";
+function loadState(){
+  try{return JSON.parse(localStorage.getItem(LS_KEY))||null;}catch(e){return null;}
+}
+function saveState(data){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(data));}catch(e){}
+}
+
+// ── GitHub Gist Sync ──────────────────────────────────────────────────────────
+const GIST_FILE="habits.json";
+async function gistPull(token,gistId){
+  const r=await fetch(`https://api.github.com/gists/${gistId}`,{
+    headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json"}});
+  if(!r.ok)throw new Error(r.status===401?"Token ungültig":r.status===404?"Gist nicht gefunden":("HTTP "+r.status));
+  const j=await r.json();
+  const file=j.files&&(j.files[GIST_FILE]||Object.values(j.files)[0]);
+  if(!file)return null;
+  let content=file.content;
+  if(file.truncated&&file.raw_url)content=await(await fetch(file.raw_url)).text();
+  return content?JSON.parse(content):null;
+}
+async function gistPush(token,gistId,data){
+  const r=await fetch(`https://api.github.com/gists/${gistId}`,{
+    method:"PATCH",
+    headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","Content-Type":"application/json"},
+    body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data,null,2)}}})});
+  if(!r.ok)throw new Error(r.status===401?"Token ungültig":r.status===404?"Gist nicht gefunden":("HTTP "+r.status));
+  return true;
+}
+
+function useHeatScroll(dep,multiplier=0.8){
+  const sr=useRef(null),cr=useRef(null);
+  const place=()=>{
+    const c=sr.current,t=cr.current;
+    if(c&&t&&t.offsetLeft>0)c.scrollLeft=Math.max(0,t.offsetLeft+BOX/2-c.offsetWidth*multiplier);
+  };
+  // Vor dem ersten Paint positionieren → kein sichtbares Springen / Flash beim Wechsel
+  React.useLayoutEffect(place,[dep]);
+  // Nachkorrektur, falls die Inter-Schrift erst nach dem Layout fertig lädt (Spaltenbreiten)
+  useEffect(()=>{
+    let n=0;const go=()=>{place();if(++n<4)setTimeout(go,150);};
+    const id=setTimeout(go,120);return()=>clearTimeout(id);
+  },[dep]);
+  return{scrollRef:sr,curRef:cr};
+}
+
+function boxBg(s){
+  if(s===null)  return "rgba(148,163,184,0.07)";
+  if(s==="full")  return "#22c55e";
+  if(s==="almost")return "#ea580c";
+  return "#1e293b";
+}
+
+function Legende(){
+  return(<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+    {[["#22c55e","Ziel erreicht"],["#ea580c","Fast erreicht"],["#1e293b","Nicht erreicht"]].map(([c,l])=>(
+      <div key={l} style={{display:"flex",alignItems:"center",gap:5}}>
+        <div style={{width:10,height:10,borderRadius:2,background:c}}/>
+        <span style={{fontSize:10,color:"#64748b"}}>{l}</span>
+      </div>
+    ))}
+  </div>);
+}
+
+// ── Medaillen-Anzeige ─────────────────────────────────────────────────────────
+function MedalRow({streak,habitName,onCelebrate}){
+  const earned=getEarnedMedals(streak);
+  if(earned.length===0)return null;
+  return(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    <span style={{fontSize:11,color:"#64748b"}}>Medaillen:</span>
+    {earned.map(m=>(
+      <button key={m.id} onClick={()=>onCelebrate(m,habitName)}
+        title={`${m.label} – ${m.weeks} Wochen`}
+        style={{background:`${m.color}15`,border:`1px solid ${m.color}44`,
+          borderRadius:20,padding:"3px 10px",cursor:"pointer",
+          display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit"}}>
+        <span style={{fontSize:14}}>{m.emoji}</span>
+        <span style={{fontSize:11,color:m.color,fontWeight:500}}>{m.label}</span>
+      </button>
+    ))}
+  </div>);
+}
+
+// ── Feierfenster ──────────────────────────────────────────────────────────────
+function CelebrationModal({medal,habitName,onClose}){
+  if(!medal)return null;
+  return(<div onClick={onClose}
+    style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:300,
+      display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)"}}>
+    <div onClick={e=>e.stopPropagation()}
+      style={{background:"#16161f",border:`1px solid ${medal.color}44`,borderRadius:24,
+        padding:"2.5rem 2rem",textAlign:"center",maxWidth:300,width:"90%",
+        animation:"medalDrop 0.45s cubic-bezier(.34,1.56,.64,1)"}}>
+      <div style={{fontSize:64,lineHeight:1,marginBottom:16,
+        animation:"medalBounce 0.6s 0.45s ease both",display:"inline-block"}}>
+        {medal.emoji}
+      </div>
+      <p style={{fontFamily:"inherit",fontSize:22,fontWeight:700,color:"#fff",marginBottom:6}}>
+        {medal.label}!
+      </p>
+      <p style={{fontSize:14,color:"#94a3b8",marginBottom:4}}>
+        {habitName}
+      </p>
+      <p style={{fontSize:13,color:medal.color,fontWeight:500,marginBottom:20}}>
+        {medal.weeks} Wochen in Folge 🔥
+      </p>
+      <button onClick={onClose}
+        style={{background:`${medal.color}18`,border:`1px solid ${medal.color}44`,
+          color:medal.color,borderRadius:12,padding:"8px 24px",fontFamily:"inherit",
+          fontSize:13,fontWeight:500,cursor:"pointer"}}>
+        ✓ Schließen
+      </button>
+    </div>
+  </div>);
+}
+
+// ── ProfilHeatmap ─────────────────────────────────────────────────────────────
+function ProfilHeatmap({habits,yearData,activeId,setActiveId,dep}){
+  const{scrollRef,curRef}=useHeatScroll(dep,0.8);
+  const labels=getML();
+  const[celebration,setCelebration]=useState(null);
+  const getS=hid=>{
+    const d=yearData[hid]||[],p=d.filter(x=>x!==null);
+    const f=p.filter(x=>x==="full").length;
+    return{full:f,almost:p.filter(x=>x==="almost").length,miss:p.filter(x=>x==="miss").length,pct:Math.round((f/(p.length||1))*100)};
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <CelebrationModal medal={celebration?.medal} habitName={celebration?.name} onClose={()=>setCelebration(null)}/>
+    <div className="card" style={{padding:"1rem",overflow:"hidden"}}>
+      <div style={{display:"flex"}}>
+        <div style={{flexShrink:0,paddingRight:8,display:"flex",flexDirection:"column"}}>
+          <div style={{height:BOX,marginBottom:GAP}}/>
+          {habits.map(h=>{
+            const dim=activeId!==null&&activeId!==h.id;
+            return(<div key={h.id} onClick={()=>setActiveId(activeId===h.id?null:h.id)}
+              style={{height:BOX,marginBottom:GAP,display:"flex",alignItems:"center",justifyContent:"center",
+                cursor:"pointer",fontSize:12,opacity:dim?0.2:1,transition:"opacity 0.2s",userSelect:"none"}}>
+              {h.emoji}
+            </div>);
+          })}
+        </div>
+        <div ref={scrollRef} style={{overflowX:"auto",flex:1}}>
+          <div style={{minWidth:52*(BOX+GAP),display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,alignItems:"center"}}>
+              {labels.map((l,i)=>(<div key={i} style={{width:BOX,flexShrink:0,fontSize:9,color:l?"#94a3b8":"transparent",whiteSpace:"nowrap",overflow:"visible"}}>{l}</div>))}
+            </div>
+            {habits.map((h,hi)=>{
+              const data=yearData[h.id]||Array(52).fill(null);
+              const dim=activeId!==null&&activeId!==h.id;
+              return(<div key={h.id} onClick={()=>setActiveId(activeId===h.id?null:h.id)}
+                style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,cursor:"pointer",opacity:dim?0.2:1,transition:"opacity 0.2s"}}>
+                {data.map((s,i)=>(<div key={i} ref={i===CW&&hi===0?curRef:null}
+                  style={{width:BOX,height:BOX,flexShrink:0,borderRadius:3,boxSizing:"border-box",
+                    background:boxBg(s),
+                    border:i===CW?`1.5px solid ${activeId===h.id?h.color:"#64748b"}`:"1px solid transparent"}}/>))}
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>
+      <p style={{fontSize:10,color:"#475569",marginTop:8,textAlign:"center"}}>
+        {activeId?"Nochmal tippen für alle":"Habit antippen zum Hervorheben"}
+      </p>
+    </div>
+    <Legende/>
+    {activeId!==null&&(()=>{
+      const h=habits.find(x=>x.id===activeId),s=getS(activeId),streak=calcStreak(yearData[activeId]);
+      return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {streak>=2&&(<div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",
+          background:"rgba(249,115,22,0.08)",border:"1px solid rgba(249,115,22,0.15)",borderRadius:12}}>
+          <span className="fire" style={{fontSize:16}}>🔥</span>
+          <span style={{fontSize:13,color:"#f97316",fontWeight:500}}>{streak} Wochen in Folge!</span>
+        </div>)}
+        <MedalRow streak={streak} habitName={h.name}
+          onCelebrate={(m,name)=>setCelebration({medal:m,name})}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+          {[[s.full,"✓ Erreicht","#22c55e"],[s.almost,"~ Fast","#ea580c"],[s.miss,"✗ Verpasst","#475569"]].map(([v,l,c])=>(
+            <div key={l} className="card" style={{textAlign:"center",padding:"0.875rem 0.5rem"}}>
+              <p style={{fontSize:10,color:"#64748b",marginBottom:4}}>{l}</p>
+              <p style={{fontSize:22,fontWeight:700,color:c,lineHeight:1}}>{v}</p>
+              <p style={{fontSize:10,color:"#475569",marginTop:4}}>{CW+1} Wo.</p>
+            </div>
+          ))}
+        </div>
+      </div>);
+    })()}
+  </div>);
+}
+
+// ── UebersichtHeatmap ─────────────────────────────────────────────────────────
+function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,dep}){
+  const{scrollRef,curRef}=useHeatScroll(dep,0.8);
+  const labels=getML();
+  const[activeH,setActiveH]=useState(null);
+  const HDR=16;
+  const hCount={};
+  profiles.forEach(p=>(profilHabits[p]||[]).forEach(h=>{
+    if(!hCount[h.id])hCount[h.id]={habit:h,count:0};
+    hCount[h.id].count++;
+  }));
+  const allH=Object.values(hCount).filter(x=>x.count>=2).map(x=>x.habit);
+  let fRef=true;
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div className="card" style={{padding:"1rem",overflow:"hidden"}}>
+      <div style={{display:"flex"}}>
+        <div style={{flexShrink:0,paddingRight:8,minWidth:84,display:"flex",flexDirection:"column"}}>
+          <div style={{height:BOX,marginBottom:GAP}}/>
+          {allH.map(h=>{
+            const dim=activeH!==null&&activeH!==h.id;
+            return(<div key={h.id}>
+              <div onClick={()=>setActiveH(a=>a===h.id?null:h.id)}
+                style={{height:HDR,marginBottom:GAP,display:"flex",alignItems:"center",gap:4,
+                  cursor:"pointer",opacity:dim?0.2:1,transition:"opacity 0.2s",userSelect:"none"}}>
+                <span style={{fontSize:12}}>{h.emoji}</span>
+                <span style={{fontSize:10,color:"#94a3b8",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:56}}>
+                  {h.name.split(" ")[0]}
+                </span>
+              </div>
+              {profiles.map(p=>(<div key={p} onClick={()=>setActiveH(a=>a===h.id?null:h.id)}
+                style={{height:BOX,marginBottom:GAP,display:"flex",alignItems:"center",cursor:"pointer",
+                  opacity:dim?0.2:1,fontSize:9,color:"#64748b",userSelect:"none"}}>
+                {p}
+              </div>))}
+            </div>);
+          })}
+        </div>
+        <div ref={scrollRef} style={{overflowX:"auto",flex:1}}>
+          <div style={{minWidth:52*(BOX+GAP),display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,alignItems:"center"}}>
+              {labels.map((l,i)=>(<div key={i} style={{width:BOX,flexShrink:0,fontSize:9,color:l?"#94a3b8":"transparent",whiteSpace:"nowrap",overflow:"visible"}}>{l}</div>))}
+            </div>
+            {allH.map(h=>{
+              const dim=activeH!==null&&activeH!==h.id;
+              return(<div key={h.id}>
+                <div onClick={()=>setActiveH(a=>a===h.id?null:h.id)}
+                  style={{height:HDR,marginBottom:GAP,display:"flex",alignItems:"center",cursor:"pointer",opacity:dim?0.2:1}}>
+                  <div style={{height:1,background:"rgba(255,255,255,0.07)",width:"100%"}}/>
+                </div>
+                {profiles.map(p=>{
+                  const data=computedYearDataAll[p]?.[h.id]||Array(52).fill(null);
+                  const isF=fRef;if(fRef)fRef=false;
+                  return(<div key={p} onClick={()=>setActiveH(a=>a===h.id?null:h.id)}
+                    style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,cursor:"pointer",opacity:dim?0.2:1,transition:"opacity 0.2s"}}>
+                    {data.map((s,i)=>(<div key={i} ref={i===CW&&isF?curRef:null}
+                      style={{width:BOX,height:BOX,flexShrink:0,borderRadius:3,boxSizing:"border-box",
+                        background:boxBg(s),border:i===CW?"1.5px solid #64748b":"1px solid transparent"}}/>))}
+                  </div>);
+                })}
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>
+      <p style={{fontSize:10,color:"#475569",marginTop:8,textAlign:"center"}}>
+        {activeH?"Nochmal tippen für alle":"Habit antippen zum Hervorheben"}
+      </p>
+    </div>
+    <Legende/>
+    {activeH!==null&&(()=>{
+      const h=allH.find(x=>x.id===activeH);if(!h)return null;
+      return(<div className="card" style={{padding:"1rem"}}>
+        <p style={{fontSize:12,color:"#94a3b8",fontWeight:500,marginBottom:12}}>{h.emoji} {h.name} · Vergleich</p>
+        {profiles.map(p=>{
+          const hasIt=(profilHabits[p]||[]).some(ph=>ph.id===activeH);
+          const d=computedYearDataAll[p]?.[activeH]||[];
+          const past=d.filter(x=>x!==null);
+          const full=past.filter(x=>x==="full").length;
+          const pct=Math.round((full/(past.length||1))*100);
+          const streak=calcStreak(d);
+          return(<div key={p} style={{marginBottom:10,opacity:hasIt?1:0.35}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:13,color:"#e2e8f0",fontWeight:500}}>{p}</span>
+              {hasIt&&<div style={{display:"flex",gap:10,alignItems:"center"}}>
+                {streak>=2&&<span style={{fontSize:11,color:"#f97316",display:"inline-flex",alignItems:"center",gap:2}}><span className="fire">🔥</span>{streak}</span>}
+                <span style={{fontSize:12,color:"#64748b"}}>{full}/{past.length} Wo. · {pct}%</span>
+              </div>}
+            </div>
+            {hasIt&&<div className="pbar"><div className="pfill" style={{width:`${pct}%`,background:pct>=70?"#22c55e":pct>=40?"#ea580c":"#334155"}}/></div>}
+          </div>);
+        })}
+      </div>);
+    })()}
+  </div>);
+}
+
+// ── SwipeRow ──────────────────────────────────────────────────────────────────
+function SwipeRow({onDelete,children}){
+  const[off,setOff]=useState(0);
+  const sx=useRef(null),mv=useRef(false);
+  const L=72;
+  const reveal=Math.abs(off);
+  const down=x=>{sx.current=x;mv.current=false;};
+  const move=x=>{
+    if(sx.current===null)return;
+    const dx=x-sx.current;
+    if(Math.abs(dx)>8)mv.current=true;
+    if(mv.current)setOff(Math.max(-L-8,Math.min(0,dx)));
+  };
+  const up=()=>{mv.current=false;setOff(o=>o<-L/2?-L:0);sx.current=null;};
+  const anim=mv.current; // beim Ziehen ohne Transition (responsiv), beim Loslassen mit Snap
+  return(<div style={{position:"relative",borderRadius:18,overflow:"hidden"}}>
+    {/* Rotes Löschfeld: Breite wächst von rechts mit dem Wisch herein (iOS-like) */}
+    <div style={{position:"absolute",right:0,top:0,bottom:0,width:reveal,
+      background:"#ef4444",display:"flex",alignItems:"center",justifyContent:"flex-end",
+      overflow:"hidden",transition:anim?"none":"width 0.22s ease"}}>
+      <button onClick={onDelete} aria-label="Habit löschen"
+        style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",
+          width:L,height:"100%",flexShrink:0}}>🗑</button>
+    </div>
+    <div
+      onPointerDown={e=>down(e.clientX)}
+      onPointerMove={e=>move(e.clientX)}
+      onPointerUp={up}
+      onPointerCancel={up}
+      style={{transform:`translateX(${off}px)`,
+        transition:anim?"none":"transform 0.22s ease",
+        position:"relative",zIndex:1,touchAction:"pan-y"}}>
+      {children}
+    </div>
+  </div>);
+}
+
+// ── SetupPanel ────────────────────────────────────────────────────────────────
+function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherProfiles=[],onShare}){
+  const[name,setName]=useState(isNew?"":profName);
+  const[editId,setEditId]=useState(null);
+  const[dragId,setDragId]=useState(null);
+  const[hoverIdx,setHoverIdx]=useState(null);
+  const[sharedKeys,setSharedKeys]=useState([]);
+  const nameRef=useRef(null);
+
+  useEffect(()=>{if(!isNew)setName(profName);},[profName,isNew]);
+  useEffect(()=>{if(isNew&&nameRef.current)nameRef.current.focus();},[isNew]);
+
+  const displayHabits=(dragId!==null&&hoverIdx!==null)?(()=>{
+    const arr=[...habits];
+    const fi=arr.findIndex(x=>x.id===dragId);if(fi<0)return arr;
+    const to=Math.max(0,Math.min(arr.length-1,hoverIdx));
+    const[m]=arr.splice(fi,1);arr.splice(to,0,m);return arr;
+  })():habits;
+
+  const upd=(id,k,v)=>setHabits(habits.map(h=>h.id===id?{...h,[k]:v}:h));
+  const del=(id)=>{setHabits(habits.filter(h=>h.id!==id));setEditId(null);};
+  const add=()=>{
+    const cols=["#f43f5e","#8b5cf6","#06b6d4","#84cc16","#f97316"];
+    const n={id:Date.now(),name:"Neuer Habit",emoji:"⭐",weekGoal:3,
+      color:cols[Math.floor(Math.random()*cols.length)],activeDays:[0,1,2,3,4,5,6]};
+    setHabits([...habits,n]);setEditId(n.id);
+  };
+  const tDay=(id,d)=>{
+    const h=habits.find(x=>x.id===id);if(!h)return;
+    const c=h.activeDays||[];
+    const nd=c.includes(d)?c.filter(x=>x!==d):[...c,d].sort((a,b)=>a-b);
+    setHabits(habits.map(x=>x.id===id?{...x,activeDays:nd}:x));
+  };
+  const handleName=()=>{
+    if(isNew){if(name.trim())onCreate(name.trim());}
+    else{onNameSave(name.trim()||profName);}
+  };
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:"0.875rem",animation:"fadeIn 0.18s ease"}}>
+    <div>
+      <p style={{fontSize:11,color:"#64748b",marginBottom:7}}>{isNew?"Name":"Profilname"}</p>
+      <input ref={isNew?nameRef:null} value={name} onChange={e=>setName(e.target.value)}
+        onBlur={handleName} onKeyDown={e=>{if(e.key==="Enter")handleName();}}
+        placeholder={isNew?"Name eingeben...":""}
+        style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",
+          borderRadius:10,padding:"10px 14px",color:"#fff",fontFamily:"inherit",fontSize:16,display:"block"}}/>
+    </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+      <p style={{fontSize:12,color:"#64748b",fontWeight:500}}>Habits</p>
+      <p style={{fontSize:10,color:"#475569"}}>Ziehen · Links wischen zum Löschen</p>
+    </div>
+    {displayHabits.map((h,displayIdx)=>(
+      <div key={h.id} draggable
+        onDragStart={()=>{setDragId(h.id);setHoverIdx(displayIdx);}}
+        onDragOver={e=>{e.preventDefault();if(!dragId||dragId===h.id)return;setHoverIdx(displayIdx);}}
+        onDragEnd={()=>{if(dragId!==null&&hoverIdx!==null)setHabits(displayHabits);setDragId(null);setHoverIdx(null);}}
+        onDrop={e=>e.preventDefault()}
+        style={{opacity:dragId===h.id?0.35:1,transition:"opacity 0.15s",cursor:"grab"}}
+      >
+        <SwipeRow onDelete={()=>del(h.id)}>
+          <div className="card" style={{borderColor:editId===h.id?h.color+"55":"rgba(255,255,255,0.08)",
+            transform:dragId===h.id?"scale(1.02)":"scale(1)",
+            boxShadow:dragId===h.id?"0 8px 24px rgba(0,0,0,0.4)":"none",transition:"all 0.15s",userSelect:"none"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{color:"#475569",fontSize:15,pointerEvents:"none"}}>☰</span>
+              <span style={{fontSize:18,pointerEvents:"none"}}>{h.emoji}</span>
+              <span style={{fontWeight:600,fontSize:14,color:"#fff",flex:1,cursor:"pointer"}}
+                onClick={e=>{e.stopPropagation();setEditId(editId===h.id?null:h.id);}}>
+                {h.name}
+              </span>
+              <span style={{fontSize:11,color:"#64748b"}}>{h.weekGoal}×</span>
+              <span style={{color:"#64748b",fontSize:11,cursor:"pointer",padding:"2px 8px"}}
+                onClick={e=>{e.stopPropagation();setEditId(editId===h.id?null:h.id);}}>
+                {editId===h.id?"▲":"▼"}
+              </span>
+            </div>
+            {editId===h.id&&(<div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",flexDirection:"column",gap:12}}>
+              <div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Name</p>
+                <input value={h.name} onChange={e=>upd(h.id,"name",e.target.value)}
+                  style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"8px 12px",color:"#fff",fontFamily:"inherit",fontSize:16}}/>
+              </div>
+              <div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Emoji</p>
+                <input value={h.emoji} onChange={e=>upd(h.id,"emoji",e.target.value)}
+                  style={{width:50,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"7px 8px",color:"#fff",fontFamily:"inherit",fontSize:16,textAlign:"center"}}/>
+              </div>
+              <div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Wochenziel</p>
+                <div style={{display:"flex",gap:5}}>
+                  {[1,2,3,4,5,6,7].map(n=>(<button key={n}
+                    onClick={e=>{e.stopPropagation();upd(h.id,"weekGoal",n);}}
+                    style={{flex:1,height:36,borderRadius:8,border:"1px solid",
+                      borderColor:h.weekGoal===n?h.color:"rgba(255,255,255,0.1)",
+                      background:h.weekGoal===n?h.color+"22":"transparent",
+                      color:h.weekGoal===n?h.color:"#94a3b8",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>{n}</button>))}
+                </div>
+              </div>
+              <div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Aktive Tage</p>
+                <div style={{display:"flex",gap:4}}>
+                  {DAYS.map((d,i)=>{
+                    const on=(h.activeDays||[]).includes(i);
+                    return(<button key={d} onClick={e=>{e.stopPropagation();tDay(h.id,i);}}
+                      style={{flex:1,height:34,borderRadius:8,border:"1px solid",
+                        borderColor:on?h.color:"rgba(255,255,255,0.1)",background:on?h.color+"22":"transparent",
+                        color:on?h.color:"#64748b",fontFamily:"inherit",fontSize:10,cursor:"pointer"}}>{d}</button>);
+                  })}
+                </div>
+              </div>
+              {otherProfiles.length>0&&(<div>
+                <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Habit teilen mit</p>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {otherProfiles.map(op=>{
+                    const k=h.id+"|"+op,done=sharedKeys.includes(k);
+                    return(<button key={op} disabled={done}
+                      onClick={e=>{e.stopPropagation();onShare(h,op);setSharedKeys(s=>[...s,k]);}}
+                      style={{display:"inline-flex",alignItems:"center",gap:5,borderRadius:20,
+                        border:"1px solid",borderColor:done?"rgba(34,197,94,0.4)":"rgba(255,255,255,0.12)",
+                        background:done?"rgba(34,197,94,0.12)":"rgba(255,255,255,0.04)",
+                        color:done?"#22c55e":"#94a3b8",padding:"6px 12px",fontFamily:"inherit",
+                        fontSize:12,cursor:done?"default":"pointer",transition:"all 0.15s"}}>
+                      {done?`✓ geteilt mit ${op}`:`→ ${op}`}
+                    </button>);
+                  })}
+                </div>
+              </div>)}
+            </div>)}
+          </div>
+        </SwipeRow>
+      </div>
+    ))}
+    <button onClick={add}
+      style={{background:"rgba(255,255,255,0.03)",border:"1px dashed rgba(255,255,255,0.15)",
+        color:"#94a3b8",borderRadius:18,padding:"0.875rem",fontFamily:"inherit",fontSize:14,cursor:"pointer",width:"100%"}}>
+      + Neuen Habit erstellen
+    </button>
+  </div>);
+}
+
+// ── WocheView ─────────────────────────────────────────────────────────────────
+function WocheView({habits,profileDays,wOff,weekLabel,onNavigate,onDayToggle,yearData}){
+  return(<React.Fragment>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <button className="wbtn" disabled={wOff<=-3} onClick={()=>onNavigate(-1)}>←</button>
+      <span style={{fontSize:13,color:"#94a3b8",fontWeight:500}}>{weekLabel()}</span>
+      <button className="wbtn" disabled={wOff>=0} onClick={()=>onNavigate(1)}>→</button>
+    </div>
+    <div key={wOff} style={{display:"flex",flexDirection:"column",gap:"0.875rem",animation:"fadeIn 0.2s ease"}}>
+      {habits.map(h=>{
+        const days=profileDays[h.id]?.[String(wOff)]||[0,0,0,0,0,0,0];
+        const active=h.activeDays||[0,1,2,3,4,5,6];
+        const prog=days.reduce((s,v,i)=>s+(active.includes(i)?v:0),0);
+        const pct=Math.min(100,(prog/h.weekGoal)*100);
+        const done=pct>=100;
+        const streak=wOff===0?calcStreak(yearData[h.id]||[]):0;
+        return(<div key={h.id} className="card" style={{boxShadow:done?`0 0 0 1px ${h.color}55`:"none",transition:"box-shadow 0.3s"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:9}}>
+              <span style={{fontSize:18}}>{h.emoji}</span>
+              <div>
+                <p style={{fontWeight:600,fontSize:15,color:"#fff",lineHeight:1.5}}>{h.name}</p>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <p style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>mind. {h.weekGoal}× / Woche</p>
+                  {streak>=2&&<span style={{fontSize:11,color:"#f97316",display:"inline-flex",alignItems:"center",gap:3}}>
+                    <span className="fire">🔥</span>{streak} Wo.
+                  </span>}
+                </div>
+              </div>
+            </div>
+            <span style={{fontSize:13,fontWeight:700,color:done?h.color:pct>=70?"#f97316":"#64748b",display:"inline-flex",alignItems:"center",gap:3}}>
+              {prog}/{h.weekGoal}{done&&<span style={{fontSize:11}}>✦</span>}
+            </span>
+          </div>
+          <div style={{display:"flex",gap:5,marginBottom:12}}>
+            {DAYS.map((d,i)=>{
+              const isA=active.includes(i),isDone=days[i]===1,isFut=wOff===0&&i>TODAY,isToday=wOff===0&&i===TODAY;
+              return(<div key={d} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                cursor:isA&&!isFut?"pointer":"default",userSelect:"none"}}
+                onClick={()=>isA&&!isFut&&onDayToggle(h.id,i)}>
+                <div style={{width:"100%",height:36,borderRadius:10,display:"flex",alignItems:"center",
+                  justifyContent:"center",fontSize:15,transition:"background 0.15s",
+                  background:!isA?"transparent":isDone?`${h.color}28`:isFut?"rgba(255,255,255,0.02)":"rgba(255,255,255,0.04)",
+                  border:isToday?`1px solid ${h.color}77`:!isA||isFut?"1px dashed rgba(255,255,255,0.06)":"1px solid rgba(255,255,255,0.08)",
+                  color:!isA?"#1a2035":isDone?h.color:isFut?"#1a2035":"#475569"}}>
+                  {!isA?"–":isDone?"✓":isFut?"":"○"}
+                </div>
+                <span style={{fontSize:9,color:isToday?"#e2e8f0":"#64748b",fontWeight:isToday?600:400}}>
+                  {isToday?"●":d}
+                </span>
+              </div>);
+            })}
+          </div>
+          <div className="pbar">
+            <div className="pfill" style={{width:`${pct}%`,background:done?h.color:pct>=70?"#f97316":"#334155",
+              boxShadow:done?`0 0 10px ${h.color}66`:"none",transition:"width 0.4s ease, box-shadow 0.3s"}}/>
+          </div>
+        </div>);
+      })}
+    </div>
+  </React.Fragment>);
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App(){
+  const saved=loadState();
+  const[profiles,setProfiles]=useState(saved?.profiles||["Marilena","Markus"]);
+  const[activePro,setActivePro]=useState(()=>{
+    const p=saved?.profiles||["Marilena","Markus"];
+    return p.includes(saved?.activePro)?saved.activePro:p[0];
+  });
+  const[tab,setTab]=useState("woche");
+  const[alleMode,setAlleMode]=useState(false);
+  const[setupMode,setSetupMode]=useState(false);
+  const[setupPro,setSetupPro]=useState(activePro);
+  const[isNewProf,setIsNewProf]=useState(false);
+  const[profilHabits,setProfilHabits]=useState(saved?.profilHabits||{"Marilena":mkH(),"Markus":mkH()});
+  const[newProfHabits,setNewProfHabits]=useState(mkH());
+  const[profilDays,setProfilDays]=useState(saved?.profilDays||MOCK);
+  const[heatId,setHeatId]=useState(null);
+  const[heatDep,setHeatDep]=useState(0);
+  const[wOff,setWOff]=useState(0);
+  const[ghToken,setGhToken]=useState(()=>{try{return localStorage.getItem("ght_token")||"";}catch(e){return"";}});
+  const[ghGist,setGhGist]=useState(()=>{try{return localStorage.getItem("ght_gist")||"";}catch(e){return"";}});
+  const[syncStatus,setSyncStatus]=useState("idle"); // idle | syncing | ok | error
+  const[syncMsg,setSyncMsg]=useState("");
+  const[showSync,setShowSync]=useState(false);
+  const skipPush=useRef(false);
+  const[profDragId,setProfDragId]=useState(null);
+  const[profHoverIdx,setProfHoverIdx]=useState(null);
+  const touchX=useRef(null);
+
+  // ── Persistenz: bei jeder Datenänderung speichern ──
+  useEffect(()=>{
+    saveState({profiles,activePro,profilHabits,profilDays});
+  },[profiles,activePro,profilHabits,profilDays]);
+
+  const computedYearDataAll={};
+  profiles.forEach(p=>{computedYearDataAll[p]=computeYearData(p,profilHabits[p]||[],profilDays,YEAR_MOCK);});
+
+  const displayProfiles=(profDragId!==null&&profHoverIdx!==null)?(()=>{
+    const arr=[...profiles];
+    const fi=arr.findIndex(p=>p===profDragId);if(fi<0)return arr;
+    const to=Math.max(0,Math.min(arr.length-1,profHoverIdx));
+    const[m]=arr.splice(fi,1);arr.splice(to,0,m);return arr;
+  })():profiles;
+
+  const activeHabits=profilHabits[activePro]||[];
+  const activeYearData=computedYearDataAll[activePro]||{};
+  const setupHabits=isNewProf?newProfHabits:(profilHabits[setupPro]||mkH());
+  const setSetupHabits=isNewProf?setNewProfHabits:(h=>setProfilHabits(p=>({...p,[setupPro]:h})));
+
+  const navigate=dir=>{const n=wOff+dir;if(n<-3||n>0)return;setWOff(n);};
+  const toggleDay=(hid,di)=>{
+    setProfilDays(p=>{
+      const prof=p[activePro]||{},hd=prof[hid]||{},key=String(wOff);
+      const d=[...(hd[key]||[0,0,0,0,0,0,0])];d[di]=d[di]?0:1;
+      return{...p,[activePro]:{...prof,[hid]:{...hd,[key]:d}}};
+    });
+  };
+  const weekLabel=()=>{
+    if(wOff===0)return`KW ${CW+1} · Diese Woche`;
+    if(wOff===-1)return`KW ${CW} · Letzte Woche`;
+    return`KW ${CW+wOff+1} · Vor ${Math.abs(wOff)} Wochen`;
+  };
+
+  const enterSetup=()=>{setSetupPro(activePro);setIsNewProf(false);setSetupMode(true);};
+  const exitSetup=()=>{if(!isNewProf)setActivePro(setupPro);setSetupMode(false);setIsNewProf(false);};
+
+  const handleProfilClick=p=>{
+    if(setupMode){setSetupPro(p);setIsNewProf(false);}
+    else{
+      setActivePro(p);
+      setAlleMode(false);
+      if(tab==="year")setHeatDep(d=>d+1);
+    }
+  };
+
+  const handlePlusClick=()=>{setIsNewProf(true);setNewProfHabits(mkH());if(!setupMode)setSetupMode(true);};
+  const handleNameSave=(oldN,newN)=>{
+    if(!newN||newN===oldN)return;
+    setProfiles(p=>p.map(x=>x===oldN?newN:x));
+    setProfilHabits(p=>{const q={...p};q[newN]=q[oldN];delete q[oldN];return q;});
+    setProfilDays(p=>{const q={...p};q[newN]=q[oldN];delete q[oldN];return q;});
+    if(activePro===oldN)setActivePro(newN);setSetupPro(newN);
+  };
+  const handleCreate=(name)=>{
+    const h=newProfHabits;
+    setProfiles(p=>[...p,name]);
+    setProfilHabits(p=>({...p,[name]:h}));
+    setProfilDays(p=>({...p,[name]:{}}));
+    setActivePro(name);setSetupPro(name);setIsNewProf(false);setNewProfHabits(mkH());
+  };
+  const handleTabClick=id=>{setTab(id);setHeatDep(d=>d+1);};
+  const handleAlleClick=()=>{setAlleMode(a=>!a);setHeatDep(d=>d+1);};
+  const shareHabit=(habit,target)=>{
+    setProfilHabits(p=>{
+      const list=p[target]||[];
+      if(list.some(h=>h.name===habit.name))return p; // schon vorhanden → nicht doppelt anlegen
+      const copy={...habit,id:Date.now()+Math.floor(Math.random()*100000)};
+      return{...p,[target]:[...list,copy]};
+    });
+  };
+
+  // ── Sync: Verbinden (Pull, bei leerem Gist initial Push) ──
+  const connectSync=async()=>{
+    const t=ghToken.trim(),g=ghGist.trim();
+    if(!t||!g){setSyncStatus("error");setSyncMsg("Token und Gist-ID ausfüllen");return;}
+    setSyncStatus("syncing");setSyncMsg("Verbinde …");
+    try{
+      const remote=await gistPull(t,g);
+      try{localStorage.setItem("ght_token",t);localStorage.setItem("ght_gist",g);}catch(e){}
+      if(remote&&remote.profiles){
+        skipPush.current=true;
+        setProfiles(remote.profiles);
+        setProfilHabits(remote.profilHabits||{});
+        setProfilDays(remote.profilDays||{});
+        if(!remote.profiles.includes(activePro))setActivePro(remote.profiles[0]);
+        setSyncMsg("Daten geladen ✓");
+      }else{
+        await gistPush(t,g,{profiles,profilHabits,profilDays,ts:Date.now()});
+        setSyncMsg("Gist initialisiert ✓");
+      }
+      setSyncStatus("ok");setShowSync(false);
+    }catch(e){setSyncStatus("error");setSyncMsg(e.message);}
+  };
+  const disconnectSync=()=>{
+    try{localStorage.removeItem("ght_token");localStorage.removeItem("ght_gist");}catch(e){}
+    setGhToken("");setGhGist("");setSyncStatus("idle");setSyncMsg("");
+  };
+
+  // Beim Start automatisch laden, falls schon verbunden
+  useEffect(()=>{
+    const t=ghToken,g=ghGist;
+    if(!t||!g)return;
+    setSyncStatus("syncing");
+    gistPull(t,g).then(remote=>{
+      if(remote&&remote.profiles){
+        skipPush.current=true;
+        setProfiles(remote.profiles);
+        setProfilHabits(remote.profilHabits||{});
+        setProfilDays(remote.profilDays||{});
+      }
+      setSyncStatus("ok");
+    }).catch(e=>{setSyncStatus("error");setSyncMsg(e.message);});
+  },[]); // nur einmal beim Laden
+
+  // Nach jeder Datenänderung automatisch hochladen (gebündelt, 1,2 s Verzögerung)
+  useEffect(()=>{
+    if(syncStatus==="idle"||syncStatus==="error"||!ghToken||!ghGist)return;
+    if(skipPush.current){skipPush.current=false;return;}
+    const id=setTimeout(()=>{
+      setSyncStatus("syncing");
+      gistPush(ghToken,ghGist,{profiles,profilHabits,profilDays,ts:Date.now()})
+        .then(()=>setSyncStatus("ok"))
+        .catch(e=>{setSyncStatus("error");setSyncMsg(e.message);});
+    },1200);
+    return()=>clearTimeout(id);
+  },[profiles,profilHabits,profilDays]); // eslint-disable-line
+
+  const syncColor={idle:"#f87171",error:"#f87171",syncing:"#fbbf24",ok:"#22c55e"}[syncStatus];
+  const syncLabel={idle:"Verbinden",error:"Fehler",syncing:"Sync …",ok:"Synced"}[syncStatus];
+
+  const activeBtn=setupMode?(isNewProf?"__new__":setupPro):(alleMode?null:activePro);
+  const isAlleActive=alleMode&&!setupMode;
+
+  return(<div style={{minHeight:"100vh",background:"#111118",fontFamily:"'Inter',sans-serif",
+    color:"#e2e8f0",maxWidth:480,margin:"0 auto"}}
+    onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
+    onTouchEnd={e=>{
+      if(touchX.current===null||tab!=="woche"||alleMode||setupMode)return;
+      const dx=e.changedTouches[0].clientX-touchX.current;
+      if(Math.abs(dx)<50)return;
+      if(dx<0&&wOff<0)navigate(1);if(dx>0&&wOff>-3)navigate(-1);
+      touchX.current=null;
+    }}>
+    <style>{`
+      *{box-sizing:border-box;margin:0;padding:0;}
+      ::-webkit-scrollbar{width:3px;height:3px;}
+      ::-webkit-scrollbar-thumb{background:#1e293b;border-radius:2px;}
+      input{font-size:16px;}input:focus{outline:none;border-color:rgba(255,255,255,0.28)!important;}
+      .card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:1.25rem;}
+      .pbar{height:7px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;}
+      .pfill{height:100%;border-radius:4px;}
+      .tab{background:none;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;color:#64748b;padding:7px 16px;border-radius:10px;transition:all 0.15s;font-weight:500;}
+      .tab.on{background:rgba(255,255,255,0.07);color:#e2e8f0;}
+      .profbtn{background:none;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:5px 14px;font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;color:#64748b;font-weight:500;transition:all 0.15s;}
+      .profbtn.on{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.25);}
+      .rbtn{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:5px 14px;font-family:'Inter',sans-serif;font-size:13px;cursor:pointer;font-weight:500;color:#64748b;transition:all 0.15s;}
+      .rbtn.on{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.25);}
+      .rbtn.green{background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.25);color:#22c55e;}
+      .wbtn{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#94a3b8;border-radius:8px;padding:6px 14px;font-family:'Inter',sans-serif;font-size:15px;cursor:pointer;}
+      .wbtn:disabled{opacity:0.2;cursor:default;}
+      @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+      @keyframes flame{0%,100%{transform:scaleY(1) scaleX(1);filter:brightness(1)}25%{transform:scaleY(1.18) scaleX(0.88);filter:brightness(1.2)}60%{transform:scaleY(1.28) scaleX(0.84);filter:brightness(1.35)}80%{transform:scaleY(1.1) scaleX(0.94);filter:brightness(1.1)}}
+      .fire{display:inline-block;animation:flame 1.4s ease-in-out infinite;transform-origin:bottom center;}
+      @keyframes medalDrop{from{opacity:0;transform:translateY(-30px) scale(0.8)}to{opacity:1;transform:translateY(0) scale(1)}}
+      @keyframes medalBounce{0%{transform:scale(0.5)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+    `}</style>
+
+    {/* ── Header ── */}
+    <div style={{position:setupMode?"relative":"sticky",top:0,zIndex:20,
+      background:"#111118",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"1.25rem 1.25rem 0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.875rem"}}>
+        <div>
+          <p style={{fontSize:12,color:"#64748b",marginBottom:3,lineHeight:1.5}}>{todayLabel()}</p>
+          <h1 style={{fontSize:21,fontWeight:700,color:"#fff",lineHeight:1.5}}>Habit Tracker</h1>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setShowSync(s=>!s)}
+            style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11,padding:"4px 10px",
+              borderRadius:20,cursor:"pointer",fontFamily:"inherit",fontWeight:500,border:"none",
+              background:syncStatus==="ok"?"rgba(34,197,94,0.1)":syncStatus==="syncing"?"rgba(251,191,36,0.1)":"rgba(239,68,68,0.1)",
+              color:syncColor}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:syncColor,display:"inline-block"}}/>
+            {syncLabel}
+          </button>
+          <button onClick={setupMode?exitSetup:enterSetup}
+            style={{
+              background:isAlleActive?"none":"rgba(255,255,255,0.08)",
+              border:`1px solid ${isAlleActive?"rgba(255,255,255,0.07)":"rgba(255,255,255,0.22)"}`,
+              color:setupMode?"rgba(255,255,255,0.35)":isAlleActive?"#475569":"#e2e8f0",
+              borderRadius:8,padding:"5px 10px",fontFamily:"inherit",fontSize:13,cursor:"pointer",
+              transition:"all 0.2s"
+            }}>⚙</button>
+        </div>
+      </div>
+      {showSync&&(<div style={{marginBottom:"0.875rem"}}>
+        <div className="card">
+          <p style={{fontSize:13,fontWeight:600,color:"#fff",marginBottom:10}}>GitHub Gist Sync</p>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div>
+              <p style={{fontSize:11,color:"#64748b",marginBottom:4}}>Fine-grained Token (github_pat_…)</p>
+              <input type="password" placeholder="github_pat_xxxxxxxx" value={ghToken}
+                onChange={e=>setGhToken(e.target.value)}
+                style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"8px 12px",color:"#fff",fontFamily:"inherit",fontSize:16}}/>
+            </div>
+            <div>
+              <p style={{fontSize:11,color:"#64748b",marginBottom:4}}>Gist-ID (aus der Gist-URL)</p>
+              <input placeholder="z. B. a1b2c3d4e5f6…" value={ghGist}
+                onChange={e=>setGhGist(e.target.value)}
+                style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"8px 12px",color:"#fff",fontFamily:"inherit",fontSize:16}}/>
+            </div>
+            <button onClick={connectSync} disabled={syncStatus==="syncing"}
+              style={{background:"rgba(34,197,94,0.12)",border:"1px solid rgba(34,197,94,0.25)",color:"#22c55e",
+                borderRadius:10,padding:"10px",fontFamily:"inherit",fontSize:14,fontWeight:600,
+                cursor:syncStatus==="syncing"?"default":"pointer",opacity:syncStatus==="syncing"?0.6:1}}>
+              {syncStatus==="syncing"?"…":"Verbinden & Daten laden"}
+            </button>
+            {(syncStatus==="ok"||syncStatus==="error")&&syncMsg&&(
+              <p style={{fontSize:11,color:syncStatus==="error"?"#f87171":"#22c55e"}}>{syncMsg}</p>
+            )}
+            {(ghToken||ghGist)&&(
+              <button onClick={disconnectSync}
+                style={{background:"none",border:"1px solid rgba(255,255,255,0.1)",color:"#94a3b8",
+                  borderRadius:10,padding:"8px",fontFamily:"inherit",fontSize:13,cursor:"pointer"}}>
+                Trennen & lokale Zugangsdaten löschen
+              </button>
+            )}
+          </div>
+          <p style={{fontSize:10,color:"#475569",marginTop:8}}>Token & Gist-ID nur lokal gespeichert · selber Token+ID auf jedem Gerät = gemeinsamer Sync</p>
+        </div>
+      </div>)}
+      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",paddingBottom:"0.875rem"}}>
+        {profiles.map(p=>(
+          <button key={p} className={`profbtn${activeBtn===p?" on":""}`} onClick={()=>handleProfilClick(p)}>{p}</button>
+        ))}
+        <button className={`profbtn${activeBtn==="__new__"?" on":""}`} style={{borderStyle:"dashed"}} onClick={handlePlusClick}>+</button>
+        {setupMode
+          ?<button className="rbtn green" style={{marginLeft:"auto"}} onClick={exitSetup}>Fertig</button>
+          :<button className={`rbtn${alleMode?" on":""}`} style={{marginLeft:"auto"}} onClick={handleAlleClick}>Alle</button>
+        }
+      </div>
+    </div>
+
+    {!setupMode&&(<div style={{display:"flex",padding:"0.75rem 1rem 0",gap:4}}>
+      {[["woche","Woche"],["year","Jahr"]].map(([id,l])=>(
+        <button key={id} className={`tab${tab===id?" on":""}`} onClick={()=>handleTabClick(id)}>{l}</button>
+      ))}
+    </div>)}
+
+    <div style={{padding:"1rem 1.25rem 3rem",display:"flex",flexDirection:"column",gap:"0.875rem"}}>
+
+      {setupMode&&(<SetupPanel key={isNewProf?"__new__":setupPro}
+        profName={isNewProf?"":setupPro} habits={setupHabits} setHabits={setSetupHabits}
+        isNew={isNewProf} onNameSave={n=>handleNameSave(setupPro,n)} onCreate={handleCreate}
+        otherProfiles={isNewProf?[]:profiles.filter(p=>p!==setupPro)} onShare={shareHabit}/>
+      )}
+
+      {!setupMode&&tab==="woche"&&!alleMode&&(
+        <WocheView habits={activeHabits} profileDays={profilDays[activePro]||{}}
+          wOff={wOff} weekLabel={weekLabel} onNavigate={navigate} onDayToggle={toggleDay} yearData={activeYearData}/>
+      )}
+
+      {!setupMode&&tab==="woche"&&alleMode&&displayProfiles.map((p,displayIdx)=>{
+        const pd=profilDays[p]||{},ph=profilHabits[p]||[];
+        const isDragging=profDragId!==null;
+        const isThisDragging=profDragId===p;
+        return(<div key={p} draggable
+          onDragStart={()=>{setProfDragId(p);setProfHoverIdx(displayIdx);}}
+          onDragOver={e=>{e.preventDefault();if(!profDragId||profDragId===p)return;setProfHoverIdx(displayIdx);}}
+          onDragEnd={()=>{
+            if(profDragId!==null&&profHoverIdx!==null)setProfiles(displayProfiles);
+            setProfDragId(null);setProfHoverIdx(null);
+          }}
+          onDrop={e=>e.preventDefault()}
+          style={{opacity:isThisDragging?0.3:1,transition:"opacity 0.15s",cursor:"grab"}}
+        >
+          <div className="card" style={{
+            transform:isThisDragging?"scale(1.02)":"scale(1)",transition:"all 0.15s",userSelect:"none",
+            padding:isDragging?"0.75rem 1rem":"1.25rem"
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:isDragging?0:12}}>
+              <span style={{color:"#475569",fontSize:14,pointerEvents:"none"}}>☰</span>
+              <button draggable={false} onClick={e=>{e.stopPropagation();setActivePro(p);setAlleMode(false);}}
+                style={{background:"none",border:"none",fontWeight:700,
+                  fontSize:isDragging?14:15,color:"#fff",
+                  cursor:"pointer",fontFamily:"inherit",padding:0,flex:1,textAlign:"left",userSelect:"none"}}>
+                {p}{isDragging?" →":""}
+              </button>
+            </div>
+            {!isDragging&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {ph.map(h=>{
+                const days=pd[h.id]?.["0"]||[0,0,0,0,0,0,0];
+                const active=h.activeDays||[0,1,2,3,4,5,6];
+                const prog=days.reduce((s,v,i)=>s+(active.includes(i)?v:0),0);
+                const pct=Math.min(100,(prog/h.weekGoal)*100);
+                return(<div key={h.id}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                    <span style={{fontSize:13,color:"#94a3b8"}}>{h.emoji} {h.name}</span>
+                    <span style={{fontSize:12,fontWeight:500,color:pct>=100?h.color:pct>=70?"#f97316":"#64748b"}}>{prog}/{h.weekGoal}</span>
+                  </div>
+                  <div className="pbar"><div className="pfill" style={{width:`${pct}%`,background:pct>=100?h.color:pct>=70?"#f97316":"#334155",transition:"width 0.4s"}}/></div>
+                </div>);
+              })}
+            </div>)}
+          </div>
+        </div>);
+      })}
+
+      {!setupMode&&tab==="year"&&!alleMode&&(<React.Fragment>
+        <p style={{fontSize:13,color:"#94a3b8"}}>Jahresübersicht {new Date().getFullYear()}</p>
+        <ProfilHeatmap habits={activeHabits} yearData={activeYearData}
+          activeId={heatId} setActiveId={setHeatId} dep={heatDep}/>
+      </React.Fragment>)}
+
+      {!setupMode&&tab==="year"&&alleMode&&(<React.Fragment>
+        <p style={{fontSize:13,color:"#94a3b8"}}>Jahresübersicht {new Date().getFullYear()} · Alle Profile</p>
+        <UebersichtHeatmap profilHabits={profilHabits} profiles={profiles}
+          computedYearDataAll={computedYearDataAll} dep={heatDep}/>
+      </React.Fragment>)}
+    </div>
+  </div>);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
