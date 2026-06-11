@@ -84,6 +84,71 @@ const HABIT_BASE=[
 ];
 function mkH(){return HABIT_BASE.map(h=>({...h}));}
 
+const EMOJI_CATS=[
+  {n:"Smileys & Gesichter",e:["😀","😃","😄","😁","😆","😅","🤣","😂","🙂","🙃","😉","😊","😇","🥰","😍","🤩","😘","😋","😛","😜","🤪","😝","🤗","🤭","🤫","🤔","🤐","😐","😑","😶","😏","😒","🙄","😬","😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤮","🤧","🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓","🧐","😕","🙁","😮","😯","😲","😳","🥺","😢","😭","😱","😖","😞","😤","😡","😠","🤬","😈","💀","💩","🤡","👻","👽","🤖","😺","😸","😻","😼","🙀","👍","👎","👏","🙌","👐","🤲","🙏","🤝","✊","👊","🤛","🤜","✌️","🤞","🤟","🤘","👌","🤌","👈","👉","👆","👇","☝️","✋","🤚","🖐️","🖖","👋","🤙","💪","🧠","👀","🫶","🤳"]},
+  {n:"Aktivität & Sport",e:["🏃","🏃‍♀️","🚶","🧗","🚴","🏋️","🤸","🧘","🤾","🤺","🏊","🤽","🚣","🏄","🏇","🚵","⛹️","⛷️","🏂","🛹","🛼","⛸️","⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏉","🥏","🎱","🏓","🏸","🥅","🏒","🏑","🥍","🏏","⛳","🏹","🎣","🥊","🥋","🤹","🎯","🎽","🏆","🥇","🥈","🥉","🏅","🎖️","🎮","🕹️","🎲","🧩","♟️","🎳"]},
+  {n:"Gesundheit & Körper",e:["💪","🦵","🦶","🧠","🫀","🦷","👀","👅","👂","🩺","💊","💉","🩹","🧬","🌡️","🚭","🛌","😴","🥱","🧴","🧼","🪥","🚿","🛁","🧹","🧽","🧘‍♀️","🙏","🫁","🦴"]},
+  {n:"Essen & Trinken",e:["🍎","🍏","🍌","🍓","🫐","🍒","🍑","🥭","🍍","🥝","🍅","🥑","🥦","🥬","🥒","🌶️","🌽","🥕","🧄","🧅","🥔","🥜","🍞","🥐","🥖","🥯","🧀","🥚","🍳","🥞","🧇","🥓","🍗","🍖","🌭","🍔","🍟","🍕","🥗","🥙","🌮","🌯","🥘","🍲","🍜","🍣","🍱","🍛","🍚","🍙","🍤","🍩","🍪","🎂","🍰","🧁","🍫","🍬","🍯","🥛","🍵","☕","🧉","🧃","🥤","🍶","🍷","🍺","🥂","🧊","💧"]},
+  {n:"Tiere & Natur",e:["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔","🐧","🐦","🦆","🦅","🦉","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐢","🐍","🐙","🦑","🦐","🦀","🐠","🐟","🐬","🐳","🐋","🦈","🐊","🐅","🦓","🦍","🐘","🦏","🐪","🦒","🦘","🐄","🐎","🐑","🦙","🐐","🦌","🐕","🐈","🐓","🦜","🕊️","🐇","🦔","🌵","🎄","🌲","🌳","🌴","🌱","🌿","☘️","🍀","🌾","🌷","🌹","🌺","🌸","🌼","🌻","🍂","🍁","🌍","🌞","🌙","⭐","🌟","✨","⚡","🔥","🌈","☀️","⛅","☁️","🌧️","⛈️","❄️","⛄","🌊"]},
+  {n:"Reisen & Orte",e:["🚗","🚕","🚙","🚌","🏎️","🚓","🚑","🚒","🚐","🚚","🚜","🛴","🚲","🛵","🏍️","🚂","🚆","🚇","🚊","🚄","🚅","✈️","🚀","🛸","🚁","⛵","🚤","🛳️","🚢","⚓","🏠","🏡","🏢","🏥","🏦","🏨","🏫","⛪","🕌","🕍","⛩️","🗼","🗽","🏰","🎡","🎢","⛲","🏖️","🏝️","⛰️","🏔️","🗻","🏕️","⛺","🌋","🧭","🗺️"]},
+  {n:"Objekte & Hobbys",e:["📚","📖","📕","📗","📘","📙","📓","📝","✏️","✒️","🖊️","🖌️","🖍️","📐","📏","✂️","📌","📎","🔖","💼","🎒","💻","🖥️","⌨️","🖱️","📱","☎️","📷","📸","🎥","📺","📻","🎙️","🎤","🎧","🎵","🎶","🎼","🎹","🥁","🎷","🎺","🎸","🪕","🎻","🎨","🖼️","🧵","🧶","💰","💵","💳","💎","🔧","🔨","🛠️","⚙️","🧰","💡","🔦","🕯️","🛒","🔑","🪑","🛋️","⏰","⏱️","⌛","⏳","🔔","📅","📆","🗓️","📈","🎁","🎈","🎉","🥦"]},
+  {n:"Symbole & Herzen",e:["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💕","💞","💓","💗","💖","💘","💝","💔","♥️","⭐","🌟","✨","🔥","💯","✅","☑️","✔️","➕","❓","❗","💤","🆗","🎯","🏁","🚩","🏳️‍🌈"]},
+  {n:"Flaggen · Sprachen",e:["🇩🇪","🇦🇹","🇨🇭","🇬🇧","🇺🇸","🇫🇷","🇪🇸","🇮🇹","🇵🇹","🇧🇷","🇳🇱","🇧🇪","🇸🇪","🇳🇴","🇩🇰","🇫🇮","🇮🇸","🇵🇱","🇨🇿","🇸🇰","🇭🇺","🇷🇴","🇬🇷","🇹🇷","🇷🇺","🇺🇦","🇮🇪","🇨🇳","🇯🇵","🇰🇷","🇮🇳","🇹🇭","🇻🇳","🇮🇩","🇵🇭","🇸🇦","🇮🇱","🇪🇬","🇲🇽","🇦🇷","🇨🇦","🇦🇺","🇳🇿","🇿🇦","🇪🇺"]},
+];
+
+// Auto-Vorschlag: Stichwort im Habit-Namen → passendes Emoji
+const EMOJI_GUESS=[
+  {em:"🚴",kw:["fahrrad","velo","bike","radeln","radfahren"]},
+  {em:"🏊",kw:["schwimm"]},
+  {em:"🧘",kw:["yoga","medit","achtsam","atem","atmen","entspann"]},
+  {em:"🚶",kw:["spazier","walk","schritte","gassi gehen"]},
+  {em:"🏃",kw:["sport","lauf","jogg","renn","fitness","training","workout","cardio"]},
+  {em:"💪",kw:["gym","kraft","muskel","liegestütz","push up","planks"]},
+  {em:"🤸",kw:["dehn","stretch","beweglich","mobility"]},
+  {em:"💧",kw:["wasser","trink","hydr"]},
+  {em:"☕",kw:["kaffee","coffee"]},
+  {em:"🍵",kw:["matcha","grüner tee"]},
+  {em:"🥗",kw:["gesund essen","salat","ernähr","clean eat"]},
+  {em:"🍎",kw:["obst","frucht","apfel"]},
+  {em:"🥦",kw:["gemüse","greens"]},
+  {em:"🍳",kw:["koch","frühstück"]},
+  {em:"😴",kw:["schlaf","ins bett","ausschlaf","früh schlafen"]},
+  {em:"⏰",kw:["aufstehen","wecker","früh auf","morgenroutine"]},
+  {em:"📚",kw:["lesen","buch","book","read"]},
+  {em:"✍️",kw:["schreib","journal","tagebuch","write","notiz"]},
+  {em:"🗣️",kw:["vokab","sprache","englisch","spanisch","französisch","duolingo"]},
+  {em:"🧠",kw:["lernen","study","studier","wiederhol","gedächtnis"]},
+  {em:"💻",kw:["program","coden","coding","code","entwickeln"]},
+  {em:"💼",kw:["arbeit","büro","work","job","bewerb"]},
+  {em:"🎸",kw:["gitarre","musik","instrument","band"]},
+  {em:"🎹",kw:["klavier","piano","keyboard"]},
+  {em:"🎨",kw:["malen","zeichnen","kunst","skizz"]},
+  {em:"📷",kw:["foto","photo","kamera"]},
+  {em:"🙏",kw:["dankbar","gratitude","beten","gebet"]},
+  {em:"🧹",kw:["putzen","aufräum","sauber","haushalt"]},
+  {em:"🚿",kw:["dusch"]},
+  {em:"🦷",kw:["zähne","zahn","zahnseide","floss"]},
+  {em:"🧴",kw:["haut","pflege","creme","skincare","eincrem"]},
+  {em:"💰",kw:["geld","sparen","budget","finanz"]},
+  {em:"🌱",kw:["garten","pflanze","gieß","blumen"]},
+  {em:"🐶",kw:["hund"]},
+  {em:"🐱",kw:["katze"]},
+  {em:"🚭",kw:["rauch","nichtrauch","zigarett"]},
+  {em:"🍷",kw:["alkohol","wein","trocken bleiben"]},
+  {em:"💊",kw:["vitamin","tablette","pille","medik","supplement","magnesium"]},
+  {em:"📱",kw:["handy","screen","bildschirm","social","instagram","scroll"]},
+  {em:"🥚",kw:["protein","eiweiß"]},
+  {em:"🧊",kw:["kalt dusch","eisbad","kältebad"]},
+  {em:"🌙",kw:["abendroutine","gute nacht"]},
+];
+const GUESS_SET=new Set(EMOJI_GUESS.map(g=>g.em));
+function guessEmoji(name){
+  const s=(name||"").toLowerCase();
+  if(!s.trim())return null;
+  for(const g of EMOJI_GUESS){if(g.kw.some(k=>s.includes(k)))return g.em;}
+  return null;
+}
+
 // Erledigte aktive Tage einer Woche zählen (dateMap = {iso:1})
 function weekDoneCount(dateMap,monday,active){
   let n=0;
@@ -519,6 +584,7 @@ function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherPr
   const[name,setName]=useState(isNew?"":profName);
   const[editId,setEditId]=useState(null);
   const[confirmDel,setConfirmDel]=useState(false);
+  const[emojiPickerId,setEmojiPickerId]=useState(null);
   const[swipe,setSwipe]=useState(null); // {id,off,animated}
   const nameRef=useRef(null);
   const reorder=useReorder(habits,h=>h.id,setHabits);
@@ -533,7 +599,15 @@ function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherPr
     });
   };
 
-  const upd=(id,k,v)=>setHabits(habits.map(h=>h.id===id?{...h,[k]:v}:h));
+  const upd=(id,k,v)=>setHabits(habits.map(h=>{
+    if(h.id!==id)return h;
+    if(k==="name"){
+      const g=guessEmoji(v);
+      // nur vorschlagen, wenn noch Standard (⭐) oder bereits ein Auto-Vorschlag aktiv ist
+      if(g&&(h.emoji==="⭐"||GUESS_SET.has(h.emoji)))return{...h,name:v,emoji:g};
+    }
+    return{...h,[k]:v};
+  }));
   const del=(id)=>{setHabits(habits.filter(h=>h.id!==id));setEditId(null);};
   const add=()=>{
     const cols=["#f43f5e","#8b5cf6","#06b6d4","#84cc16","#f97316"];
@@ -626,8 +700,26 @@ function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherPr
               </div>
               <div>
                 <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Emoji</p>
-                <input value={h.emoji} onChange={e=>upd(h.id,"emoji",e.target.value)}
-                  style={{width:50,background:"var(--input-bg)",border:"1px solid var(--input-border)",borderRadius:8,padding:"7px 8px",color:"var(--txt-strong)",fontFamily:"inherit",fontSize:16,textAlign:"center"}}/>
+                <button onClick={()=>setEmojiPickerId(emojiPickerId===h.id?null:h.id)}
+                  style={{width:50,height:40,background:"var(--input-bg)",border:`1px solid ${emojiPickerId===h.id?h.color:"var(--input-border)"}`,
+                    borderRadius:8,fontSize:20,lineHeight:1,cursor:"pointer",textAlign:"center"}}>{h.emoji}</button>
+                {emojiPickerId===h.id&&(
+                  <div style={{marginTop:8,padding:8,background:"var(--surface-soft)",
+                    border:"1px solid var(--card-border)",borderRadius:10,maxHeight:240,overflowY:"auto"}}>
+                    {EMOJI_CATS.map(cat=>(
+                      <div key={cat.n} style={{marginBottom:6}}>
+                        <p style={{fontSize:10,color:"var(--txt-dim)",margin:"2px 2px 5px",fontWeight:500}}>{cat.n}</p>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                          {cat.e.map((em,k)=>(
+                            <button key={cat.n+k} onClick={()=>{upd(h.id,"emoji",em);setEmojiPickerId(null);}}
+                              style={{width:34,height:34,fontSize:19,lineHeight:1,border:"none",cursor:"pointer",borderRadius:8,
+                                background:em===h.emoji?h.color+"33":"transparent"}}>{em}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p style={{fontSize:11,color:"#64748b",marginBottom:6}}>Wochenziel</p>
@@ -780,6 +872,7 @@ function App(){
   const[showSync,setShowSync]=useState(false);
   const skipPush=useRef(false);
   const touchX=useRef(null);
+  const touchY=useRef(null);
   const profReorder=useReorder(profiles,p=>p,setProfiles);
 
   // ── Tag/Nacht: System folgen, manuell übersteuerbar ──
@@ -955,13 +1048,15 @@ function App(){
 
   return(<div style={{minHeight:"100vh",background:"var(--bg)",fontFamily:"'Inter',sans-serif",
     color:"var(--txt)",maxWidth:480,margin:"0 auto"}}
-    onTouchStart={e=>{touchX.current=e.touches[0].clientX;}}
+    onTouchStart={e=>{touchX.current=e.touches[0].clientX;touchY.current=e.touches[0].clientY;}}
     onTouchEnd={e=>{
-      if(touchX.current===null||tab!=="woche"||alleMode||setupMode)return;
+      if(touchX.current===null||tab!=="woche"||alleMode||setupMode){touchX.current=null;return;}
       const dx=e.changedTouches[0].clientX-touchX.current;
-      if(Math.abs(dx)<50)return;
-      if(dx<0&&wOff<0)navigate(1);if(dx>0&&wOff>-(WEEKS-1))navigate(-1);
+      const dy=e.changedTouches[0].clientY-(touchY.current||0);
       touchX.current=null;
+      // nur als Wochenwechsel werten, wenn klar horizontal: genug Strecke UND deutlich mehr X als Y
+      if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*2)return;
+      if(dx<0&&wOff<0)navigate(1);if(dx>0&&wOff>-(WEEKS-1))navigate(-1);
     }}>
     <style>{`
       *{box-sizing:border-box;margin:0;padding:0;}
