@@ -63,7 +63,7 @@ const TODAY_ISO=isoDate(TODAY_DATE);
 const THIS_MONDAY=mondayOf(TODAY_DATE);
 const TODAY=(TODAY_DATE.getDay()+6)%7; // Index heute in der Woche (Mo=0 … So=6)
 const YEAR=TODAY_DATE.getFullYear();
-const YEAR_START_MONDAY=mondayOf(new Date(YEAR,0,1));                 // Montag der Woche mit dem 1. Jan
+const YEAR_START_MONDAY=mondayOf(new Date(YEAR,0,4));                 // Montag der ISO-Woche 1 (enthält immer den 1. Donnerstag → Label „Jan" in jedem Jahr)
 const WEEKS=Math.round((mondayOf(new Date(YEAR,11,31))-YEAR_START_MONDAY)/(7*864e5))+1; // Spalten Jan→Dez
 const CW=Math.round((THIS_MONDAY-YEAR_START_MONDAY)/(7*864e5));        // Index der laufenden Woche im Jahr
 function weekMonday(wOff){return addDays(THIS_MONDAY,wOff*7);}         // Wochenansicht: Versatz von heute
@@ -122,7 +122,7 @@ function streakOf(dateMap,active,weekGoal){
   }
   return s;
 }
-function getML(){return Array.from({length:WEEKS},(_,i)=>{const m=colMonday(i).getMonth();return m!==(i>0?colMonday(i-1).getMonth():-1)?MONTHS[m]:"";});}
+function getML(){return Array.from({length:WEEKS},(_,i)=>{const m=addDays(colMonday(i),3).getMonth();const pm=i>0?addDays(colMonday(i-1),3).getMonth():-1;return m!==pm?MONTHS[m]:"";});}
 function getEarnedMedals(streak){return MEDALS.filter(m=>streak>=m.weeks);}
 
 function todayLabel(){
@@ -250,7 +250,7 @@ function CelebrationModal({medal,habitName,onClose}){
 
 // ── ProfilHeatmap ─────────────────────────────────────────────────────────────
 function ProfilHeatmap({habits,yearData,daysData={},activeId,setActiveId,dep}){
-  const{scrollRef,curRef}=useHeatScroll(dep,0.8);
+  const{scrollRef,curRef}=useHeatScroll(dep,0.9);
   const labels=getML();
   const[celebration,setCelebration]=useState(null);
   const getS=hid=>{
@@ -274,12 +274,12 @@ function ProfilHeatmap({habits,yearData,daysData={},activeId,setActiveId,dep}){
           })}
         </div>
         <div ref={scrollRef} style={{overflowX:"auto",flex:1}}>
-          <div style={{minWidth:52*(BOX+GAP),display:"flex",flexDirection:"column"}}>
+          <div style={{minWidth:WEEKS*(BOX+GAP),display:"flex",flexDirection:"column"}}>
             <div style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,alignItems:"center"}}>
               {labels.map((l,i)=>(<div key={i} style={{width:BOX,flexShrink:0,fontSize:9,color:l?"var(--txt-dim)":"transparent",whiteSpace:"nowrap",overflow:"visible"}}>{l}</div>))}
             </div>
             {habits.map((h,hi)=>{
-              const data=yearData[h.id]||Array(52).fill(null);
+              const data=yearData[h.id]||Array(WEEKS).fill(null);
               const dim=activeId!==null&&activeId!==h.id;
               return(<div key={h.id} onClick={()=>setActiveId(activeId===h.id?null:h.id)}
                 style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,cursor:"pointer",opacity:dim?0.2:1,transition:"opacity 0.2s"}}>
@@ -323,7 +323,7 @@ function ProfilHeatmap({habits,yearData,daysData={},activeId,setActiveId,dep}){
 
 // ── UebersichtHeatmap ─────────────────────────────────────────────────────────
 function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,profilDays={},dep}){
-  const{scrollRef,curRef}=useHeatScroll(dep,0.8);
+  const{scrollRef,curRef}=useHeatScroll(dep,0.96);
   const labels=getML();
   const[activeH,setActiveH]=useState(null);
   const HDR=16;
@@ -360,7 +360,7 @@ function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,profilDays
           })}
         </div>
         <div ref={scrollRef} style={{overflowX:"auto",flex:1}}>
-          <div style={{minWidth:52*(BOX+GAP),display:"flex",flexDirection:"column"}}>
+          <div style={{minWidth:WEEKS*(BOX+GAP),display:"flex",flexDirection:"column"}}>
             <div style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,alignItems:"center"}}>
               {labels.map((l,i)=>(<div key={i} style={{width:BOX,flexShrink:0,fontSize:9,color:l?"var(--txt-dim)":"transparent",whiteSpace:"nowrap",overflow:"visible"}}>{l}</div>))}
             </div>
@@ -372,7 +372,7 @@ function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,profilDays
                   <div style={{height:1,background:"var(--divider)",width:"100%"}}/>
                 </div>
                 {profiles.map(p=>{
-                  const data=computedYearDataAll[p]?.[h.id]||Array(52).fill(null);
+                  const data=computedYearDataAll[p]?.[h.id]||Array(WEEKS).fill(null);
                   const isF=fRef;if(fRef)fRef=false;
                   return(<div key={p} onClick={()=>setActiveH(a=>a===h.id?null:h.id)}
                     style={{display:"flex",gap:GAP,height:BOX,marginBottom:GAP,cursor:"pointer",opacity:dim?0.2:1,transition:"opacity 0.2s"}}>
@@ -401,7 +401,7 @@ function UebersichtHeatmap({profilHabits,profiles,computedYearDataAll,profilDays
           const past=d.filter(x=>x!==null);
           const full=past.filter(x=>x==="full").length;
           const pct=Math.round((full/(past.length||1))*100);
-          const streak=calcStreak(d);
+          const streak=streakOf(profilDays[p]?.[activeH]||{},h.activeDays,h.weekGoal);
           return(<div key={p} style={{marginBottom:10,opacity:hasIt?1:0.35}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
               <span style={{fontSize:13,color:"var(--txt)",fontWeight:500}}>{p}</span>
@@ -1076,14 +1076,14 @@ function App(){
 
       {!setupMode&&tab==="year"&&!alleMode&&(<React.Fragment>
         <p style={{fontSize:13,color:"var(--txt-dim)"}}>Jahresübersicht {new Date().getFullYear()}</p>
-        <ProfilHeatmap habits={activeHabits} yearData={activeYearData}
+        <ProfilHeatmap habits={activeHabits} yearData={activeYearData} daysData={profilDays[activePro]||{}}
           activeId={heatId} setActiveId={setHeatId} dep={heatDep}/>
       </React.Fragment>)}
 
       {!setupMode&&tab==="year"&&alleMode&&(<React.Fragment>
         <p style={{fontSize:13,color:"var(--txt-dim)"}}>Jahresübersicht {new Date().getFullYear()} · Alle Profile</p>
         <UebersichtHeatmap profilHabits={profilHabits} profiles={profiles}
-          computedYearDataAll={computedYearDataAll} dep={heatDep}/>
+          computedYearDataAll={computedYearDataAll} profilDays={profilDays} dep={heatDep}/>
       </React.Fragment>)}
     </div>
   </div>);
