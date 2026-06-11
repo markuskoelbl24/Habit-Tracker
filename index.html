@@ -515,9 +515,10 @@ function useReorder(items,getId,onCommit){
 }
 
 // ── SetupPanel ────────────────────────────────────────────────────────────────
-function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherProfiles=[],allHabits={},onToggleShare}){
+function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherProfiles=[],allHabits={},onToggleShare,onDeleteProfile}){
   const[name,setName]=useState(isNew?"":profName);
   const[editId,setEditId]=useState(null);
+  const[confirmDel,setConfirmDel]=useState(false);
   const[swipe,setSwipe]=useState(null); // {id,off,animated}
   const nameRef=useRef(null);
   const reorder=useReorder(habits,h=>h.id,setHabits);
@@ -552,13 +553,50 @@ function SetupPanel({profName,habits,setHabits,isNew,onNameSave,onCreate,otherPr
   };
 
   return(<div style={{display:"flex",flexDirection:"column",gap:"0.875rem",animation:"fadeIn 0.18s ease"}}>
+    {confirmDel&&onDeleteProfile&&(
+      <div onClick={()=>setConfirmDel(false)}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",
+          alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:"1.5rem"}}>
+        <div onClick={e=>e.stopPropagation()}
+          style={{background:"var(--card-bg)",border:"1px solid var(--card-border)",borderRadius:18,
+            padding:"1.5rem",maxWidth:320,width:"100%",boxShadow:"0 20px 50px rgba(0,0,0,0.4)",
+            animation:"medalDrop 0.25s ease"}}>
+          <p style={{fontSize:16,fontWeight:600,color:"var(--txt-strong)",marginBottom:8}}>Profil „{profName}" löschen?</p>
+          <p style={{fontSize:13,color:"var(--txt-dim)",lineHeight:1.5,marginBottom:18}}>
+            Alle Habits und der gesamte Verlauf dieses Profils werden entfernt. Das lässt sich nicht rückgängig machen.
+          </p>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setConfirmDel(false)}
+              style={{flex:1,background:"transparent",border:"1px solid var(--input-border)",color:"var(--txt)",
+                borderRadius:12,padding:"10px",fontFamily:"inherit",fontSize:14,fontWeight:500,cursor:"pointer"}}>
+              Abbrechen
+            </button>
+            <button onClick={()=>{setConfirmDel(false);onDeleteProfile();}}
+              style={{flex:1,background:"#ef4444",border:"1px solid #ef4444",color:"#fff",
+                borderRadius:12,padding:"10px",fontFamily:"inherit",fontSize:14,fontWeight:500,cursor:"pointer"}}>
+              Löschen
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div>
       <p style={{fontSize:11,color:"#64748b",marginBottom:7}}>{isNew?"Name":"Profilname"}</p>
-      <input ref={isNew?nameRef:null} value={name} onChange={e=>setName(e.target.value)}
-        onBlur={handleName} onKeyDown={e=>{if(e.key==="Enter")handleName();}}
-        placeholder={isNew?"Name eingeben...":""}
-        style={{width:"100%",background:"var(--input-bg)",border:"1px solid var(--input-border)",
-          borderRadius:10,padding:"10px 14px",color:"var(--txt-strong)",fontFamily:"inherit",fontSize:16,display:"block"}}/>
+      <div style={{display:"flex",gap:8}}>
+        <input ref={isNew?nameRef:null} value={name} onChange={e=>setName(e.target.value)}
+          onBlur={handleName} onKeyDown={e=>{if(e.key==="Enter")handleName();}}
+          placeholder={isNew?"Name eingeben...":""}
+          style={{flex:1,minWidth:0,background:"var(--input-bg)",border:"1px solid var(--input-border)",
+            borderRadius:10,padding:"10px 14px",color:"var(--txt-strong)",fontFamily:"inherit",fontSize:16}}/>
+        {!isNew&&onDeleteProfile&&(
+          <button onClick={()=>setConfirmDel(true)}
+            style={{flexShrink:0,background:"rgba(239,68,68,0.08)",
+              border:"1px solid rgba(239,68,68,0.35)",color:"#ef4444",borderRadius:10,padding:"0 14px",
+              fontFamily:"inherit",fontSize:13,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap",transition:"all 0.15s"}}>
+            Löschen
+          </button>
+        )}
+      </div>
     </div>
     <p style={{fontSize:12,color:"#64748b",fontWeight:500}}>Habits</p>
     {habits.map((h,idx)=>{
@@ -824,6 +862,15 @@ function App(){
     setProfilDays(p=>({...p,[name]:{}}));
     setActivePro(name);setSetupPro(name);setIsNewProf(false);setNewProfHabits(mkH());
   };
+  const handleDeleteProfile=(name)=>{
+    const remaining=profiles.filter(p=>p!==name);
+    setProfiles(remaining);
+    setProfilHabits(p=>{const q={...p};delete q[name];return q;});
+    setProfilDays(p=>{const q={...p};delete q[name];return q;});
+    if(activePro===name)setActivePro(remaining[0]||"");
+    if(remaining.length>0){setSetupPro(remaining[0]);setIsNewProf(false);}
+    // bei 0 verbleibenden übernimmt der Onboarding-Effekt unten
+  };
   const handleTabClick=id=>{setTab(id);setHeatDep(d=>d+1);};
   const handleAlleClick=()=>{setAlleMode(a=>!a);setHeatDep(d=>d+1);};
   const toggleShareHabit=(habit,target,on)=>{
@@ -898,6 +945,11 @@ function App(){
   const syncColor={idle:"#f87171",error:"#f87171",syncing:"#d9920b",ok:"#16a34a"}[syncStatus];
   const syncLabel={idle:"Verbinden",error:"Fehler",syncing:"Synct …",ok:"Verbunden"}[syncStatus];
 
+  // Onboarding: keine Profile (frischer Start / alle gelöscht) → direkt Namenseingabe
+  useEffect(()=>{
+    if(profiles.length===0){setSetupMode(true);setIsNewProf(true);setSetupPro("");setNewProfHabits(mkH());}
+  },[profiles.length]);
+
   const activeBtn=setupMode?(isNewProf?"__new__":setupPro):(alleMode?null:activePro);
   const isAlleActive=alleMode&&!setupMode;
 
@@ -960,13 +1012,13 @@ function App(){
               cursor:"pointer",lineHeight:1,transition:"all 0.2s"}}>
             {resolvedTheme==="dark"?"☾":"☀"}
           </button>
-          <button onClick={setupMode?exitSetup:enterSetup}
+          <button onClick={setupMode?exitSetup:enterSetup} aria-label="Setup"
             style={{
-              background:isAlleActive?"none":"var(--card-border)",
-              border:`1px solid ${isAlleActive?"var(--divider)":"var(--input-border)"}`,
-              color:setupMode?"var(--txt-dim)":isAlleActive?"#475569":"var(--txt)",
-              borderRadius:8,padding:"5px 10px",fontFamily:"inherit",fontSize:13,cursor:"pointer",
-              transition:"all 0.2s"
+              background:setupMode?"var(--chip-on-bg)":"var(--card-bg)",
+              border:`1px solid ${setupMode?"var(--chip-on-border)":"var(--input-border)"}`,
+              color:setupMode?"#fff":"var(--txt-strong)",
+              borderRadius:8,padding:"5px 10px",fontFamily:"inherit",fontSize:15,lineHeight:1,
+              cursor:"pointer",transition:"all 0.2s"
             }}>⚙</button>
         </div>
       </div>
@@ -1012,7 +1064,7 @@ function App(){
         ))}
         <button className={`profbtn${activeBtn==="__new__"?" on":""}`} style={{borderStyle:"dashed"}} onClick={handlePlusClick}>+</button>
         {setupMode
-          ?<button className="rbtn green" style={{marginLeft:"auto"}} onClick={exitSetup}>Fertig</button>
+          ?(profiles.length>0&&<button className="rbtn green" style={{marginLeft:"auto"}} onClick={exitSetup}>Fertig</button>)
           :<button className={`rbtn${alleMode?" on":""}`} style={{marginLeft:"auto"}} onClick={handleAlleClick}>Alle</button>
         }
       </div>
@@ -1030,7 +1082,8 @@ function App(){
         profName={isNewProf?"":setupPro} habits={setupHabits} setHabits={setSetupHabits}
         isNew={isNewProf} onNameSave={n=>handleNameSave(setupPro,n)} onCreate={handleCreate}
         otherProfiles={isNewProf?[]:profiles.filter(p=>p!==setupPro)}
-        allHabits={profilHabits} onToggleShare={toggleShareHabit}/>
+        allHabits={profilHabits} onToggleShare={toggleShareHabit}
+        onDeleteProfile={isNewProf?null:()=>handleDeleteProfile(setupPro)}/>
       )}
 
       {!setupMode&&tab==="woche"&&!alleMode&&(
